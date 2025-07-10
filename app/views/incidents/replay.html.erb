@@ -1,0 +1,39 @@
+<div style="padding: 20px;">
+  <h2>Incident Transcript Replay</h2>
+  
+  <button id="start-replay" onclick="startReplay()">Start Replay</button>
+  
+  <div id="messages" style="margin-top: 20px; font-family: monospace; line-height: 1.5;"></div>
+</div>
+
+<script>
+  const messages = <%= raw @messages.to_json %>;
+  const timePerMessage = <%= @time_per_message * 1000 %>; // Convert to milliseconds
+  let currentIndex = 0;
+  let replayInterval;
+
+  function startReplay() {
+    document.getElementById('start-replay').disabled = true;
+    document.getElementById('messages').innerHTML = '';
+    currentIndex = 0;
+    
+    replayInterval = setInterval(function() {
+      if (currentIndex < messages.length) {
+        const message = messages[currentIndex];
+        const messageDiv = document.createElement('div');
+        messageDiv.style.marginBottom = '10px';
+        messageDiv.innerHTML = `<strong>${message.speaker}:</strong> ${message.text}`;
+        document.getElementById('messages').appendChild(messageDiv);
+        
+        // Auto scroll to bottom
+        messageDiv.scrollIntoView({ behavior: 'smooth' });
+        
+        currentIndex++;
+      } else {
+        clearInterval(replayInterval);
+        document.getElementById('start-replay').disabled = false;
+        document.getElementById('start-replay').textContent = 'Replay Again';
+      }
+    }, timePerMessage);
+  }
+</script> 
