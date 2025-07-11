@@ -1,39 +1,276 @@
-<div style="padding: 20px;">
-  <h2>Incident Transcript Replay</h2>
+<div style="padding: 20px; display: flex; gap: 20px;">
+  <div style="flex: 1;">
+    <h2>Incident Transcript Replay</h2>
+    
+    <button id="start-replay" onclick="startReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Start Replay</button>
+    <button id="stop-replay" onclick="stopReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">Stop Replay</button>
+    <span id="stats" style="margin-left: 20px; font-size: 12px; color: #666;"></span>
+    
+    <div id="messages" style="margin-top: 20px; font-family: monospace; line-height: 1.5; height: 600px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;"></div>
+  </div>
   
-  <button id="start-replay" onclick="startReplay()">Start Replay</button>
-  
-  <div id="messages" style="margin-top: 20px; font-family: monospace; line-height: 1.5;"></div>
+  <div style="flex: 1;">
+    <h2>AI Suggestions <span id="queue-status" style="font-size: 12px; color: #999;"></span></h2>
+    
+    <div id="suggestions" style="margin-top: 20px; height: 600px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
+      <p style="color: #666;">Suggestions will appear here during replay.</p>
+    </div>
+  </div>
 </div>
 
-<script>
+<%= javascript_tag do %>
   const messages = <%= raw @messages.to_json %>;
   const timePerMessage = <%= @time_per_message * 1000 %>; // Convert to milliseconds
+  const incidentId = <%= @incident_id %>;
   let currentIndex = 0;
   let replayInterval;
+  let subscription;
+  let pollingInterval;
+  let stats = { filtered: 0, enqueued: 0, received: 0 };
+
+  function initializeWebSocket() {
+    let consumer;
+    if (typeof ActionCable !== 'undefined') {
+      consumer = ActionCable.createConsumer();
+    } else {
+      console.error("ActionCable not available");
+      return;
+    }
+
+    subscription = consumer.subscriptions.create(
+      { channel: "IncidentSuggestionsChannel", incident_id: incidentId },
+      {
+        connected() {
+          document.getElementById('queue-status').textContent = '(connected)';
+        },
+        
+        disconnected() {
+          document.getElementById('queue-status').textContent = '(disconnected)';
+        },
+        
+        received(data) {
+          stats.received++;
+          updateStats();
+          
+          if (data.suggestions && data.suggestions.length > 0) {
+            displaySuggestions(data.suggestions);
+          }
+        },
+        
+        rejected() {
+          document.getElementById('queue-status').textContent = '(rejected)';
+        }
+      }
+    );
+  }
+  
+  function updateStats() {
+    document.getElementById('stats').textContent = 
+      `Filtered: ${stats.filtered} | Enqueued: ${stats.enqueued} | Received: ${stats.received}`;
+  }
 
   function startReplay() {
     document.getElementById('start-replay').disabled = true;
+    document.getElementById('start-replay').style.display = 'none';
+    document.getElementById('stop-replay').style.display = 'inline-block';
     document.getElementById('messages').innerHTML = '';
+    document.getElementById('suggestions').innerHTML = '';
     currentIndex = 0;
+    stats = { filtered: 0, enqueued: 0, received: 0 };
+    updateStats();
+    
+    initializeWebSocket();
+    startPolling();
+    
+    fetch('/incidents/' + incidentId + '/clear_suggestions', { 
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+      }
+    });
     
     replayInterval = setInterval(function() {
       if (currentIndex < messages.length) {
         const message = messages[currentIndex];
+        
+        // Display the message
         const messageDiv = document.createElement('div');
         messageDiv.style.marginBottom = '10px';
         messageDiv.innerHTML = `<strong>${message.speaker}:</strong> ${message.text}`;
         document.getElementById('messages').appendChild(messageDiv);
-        
-        // Auto scroll to bottom
         messageDiv.scrollIntoView({ behavior: 'smooth' });
+        
+        // Send message for analysis (now async with filter)
+        const startTime = performance.now();
+        
+        fetch('/incidents/' + incidentId + '/analyze_message', {
+          method: 'POST',
+          headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: message,
+            index: currentIndex
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          const responseTime = performance.now() - startTime;
+          console.log(`Message ${currentIndex} - Status: ${data.status}, Filter: ${data.filter_time_ms}ms, Total: ${responseTime.toFixed(1)}ms`);
+          
+          if (data.status === 'filtered') {
+            stats.filtered++;
+          } else if (data.status === 'enqueued') {
+            stats.enqueued++;
+          }
+          updateStats();
+        })
+        .catch(error => console.error('Error analyzing message:', error));
         
         currentIndex++;
       } else {
         clearInterval(replayInterval);
         document.getElementById('start-replay').disabled = false;
+        document.getElementById('start-replay').style.display = 'inline-block';
         document.getElementById('start-replay').textContent = 'Replay Again';
+        document.getElementById('stop-replay').style.display = 'none';
+        
+        // Keep WebSocket open for late-arriving suggestions
+        setTimeout(() => {
+          document.getElementById('queue-status').textContent = '(replay complete)';
+        }, 2000);
       }
     }, timePerMessage);
   }
-</script> 
+  
+  function stopReplay() {
+    if (replayInterval) {
+      clearInterval(replayInterval);
+      replayInterval = null;
+    }
+    
+    if (subscription) {
+      subscription.unsubscribe();
+      subscription = null;
+    }
+    
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+    
+    document.getElementById('start-replay').disabled = false;
+    document.getElementById('start-replay').style.display = 'inline-block';
+    document.getElementById('start-replay').textContent = 'Start Replay';
+    document.getElementById('stop-replay').style.display = 'none';
+    document.getElementById('queue-status').textContent = '(stopped)';
+  }
+  
+  function displaySuggestions(suggestions) {
+    const suggestionsDiv = document.getElementById('suggestions');
+    if (!suggestionsDiv) return;
+    
+    suggestions.forEach(suggestion => {
+      const suggestionCard = document.createElement('div');
+      suggestionCard.style.cssText = 'border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px; background-color: #f9f9f9;';
+      
+      const typeColors = {
+        'action_item': '#007bff',
+        'trigger_event': '#28a745',
+        'root_cause_theory': '#ffc107',
+        'missing_metadata': '#6c757d'
+      };
+      
+      const typeLabels = {
+        'action_item': 'Action Item',
+        'trigger_event': 'Trigger Event',
+        'root_cause_theory': 'Root Cause Theory',
+        'missing_metadata': 'Missing Metadata'
+      };
+      
+      const confidence = suggestion.confidence ? ` (${Math.round(suggestion.confidence * 100)}%)` : '';
+      
+      suggestionCard.innerHTML = `
+        <div style="color: ${typeColors[suggestion.suggestion_type] || '#000'}; font-weight: bold; margin-bottom: 5px;">
+          ${typeLabels[suggestion.suggestion_type] || suggestion.suggestion_type}${confidence}
+        </div>
+        <div>${suggestion.content}</div>
+        <div style="margin-top: 5px; font-size: 11px; color: #999;">
+          Message #${suggestion.source_index || 'unknown'}
+        </div>
+        <div style="margin-top: 10px;">
+          <button onclick="acceptSuggestion(${suggestion.id})" style="margin-right: 5px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Accept</button>
+          <button onclick="dismissSuggestion(${suggestion.id})" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">Dismiss</button>
+        </div>
+      `;
+      
+      suggestionCard.id = `suggestion-${suggestion.id}`;
+      suggestionsDiv.appendChild(suggestionCard);
+      suggestionCard.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  function startPolling() {
+    pollingInterval = setInterval(() => {
+      fetch(`/incidents/${incidentId}/suggestions`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.suggestions && data.suggestions.length > 0) {
+            const currentCount = document.getElementById('suggestions').children.length;
+            if (data.suggestions.length > currentCount) {
+              const newSuggestions = data.suggestions.slice(currentCount);
+              displaySuggestions(newSuggestions);
+            }
+          }
+        })
+        .catch(error => console.error('Polling error:', error));
+    }, 3000);
+  }
+  
+  function acceptSuggestion(id) {
+    updateSuggestionStatus(id, 'accepted');
+  }
+  
+  function dismissSuggestion(id) {
+    updateSuggestionStatus(id, 'dismissed');
+  }
+  
+  function updateSuggestionStatus(id, status) {
+    fetch(`/suggestions/${id}/update_status`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: status })
+    })
+    .then(response => response.json())
+    .then(data => {
+      const card = document.getElementById(`suggestion-${id}`);
+      if (card) {
+        card.style.opacity = '0.5';
+        card.querySelector('div:last-child').innerHTML = `<span style="color: ${status === 'accepted' ? 'green' : 'red'};">✓ ${status}</span>`;
+      }
+    })
+    .catch(error => console.error('Error updating suggestion:', error));
+  }
+  
+  window.addEventListener('DOMContentLoaded', () => {
+    // Ready
+  });
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (subscription) {
+      subscription.unsubscribe();
+    }
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+    if (replayInterval) {
+      clearInterval(replayInterval);
+    }
+  });
+<% end %> 

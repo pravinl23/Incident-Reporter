@@ -10,7 +10,15 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_10_052340) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_10_230000) do
+  create_table "incidents", force: :cascade do |t|
+    t.string "title"
+    t.string "status"
+    t.string "severity"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "messages", force: :cascade do |t|
     t.text "content"
     t.datetime "timestamp"
@@ -24,5 +32,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_052340) do
     t.datetime "timestamp"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "incident_id", null: false
+    t.string "suggestion_type"
+    t.integer "source_transcript_index"
+    t.float "confidence"
+    t.string "status", default: "new"
+    t.index ["incident_id"], name: "index_suggestions_on_incident_id"
   end
+
+  add_foreign_key "suggestions", "incidents"
 end

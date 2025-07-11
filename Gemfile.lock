@@ -113,6 +113,10 @@ GEM
       multi_xml (>= 0.5.2)
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
+    importmap-rails (2.1.0)
+      actionpack (>= 6.0.0)
+      activesupport (>= 6.0.0)
+      railties (>= 6.0.0)
     io-console (0.8.0)
     irb (1.15.2)
       pp (>= 0.6.0)
@@ -171,6 +175,8 @@ GEM
       racc (~> 1.4)
     nokogiri (1.18.8-x86_64-linux-gnu)
       racc (~> 1.4)
+    openai (0.13.0)
+      connection_pool
     ostruct (0.6.2)
     parallel (1.27.0)
     parser (3.3.8.0)
@@ -234,6 +240,8 @@ GEM
     rdoc (6.14.2)
       erb
       psych (>= 4.0.0)
+    redis (5.4.0)
+      redis-client (>= 0.22.0)
     redis-client (0.25.0)
       connection_pool
     regexp_parser (2.10.0)
@@ -336,11 +344,14 @@ DEPENDENCIES
   debug
   dotenv-rails
   httparty
+  importmap-rails
   jbuilder
   kamal
+  openai
   propshaft
   puma (>= 5.0)
   rails (~> 8.0.2)
+  redis
   rubocop-rails-omakase
   sidekiq
   solid_cable

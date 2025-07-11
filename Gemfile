@@ -1,8 +1,10 @@
 source "https://rubygems.org"
 
+gem "openai" # for AI suggestions
 gem 'httparty' # for API calls
 gem 'dotenv-rails' # for API keys
 gem 'sidekiq' # for background jobs
+gem 'redis' # for Sidekiq and ActionCable
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.0.2"

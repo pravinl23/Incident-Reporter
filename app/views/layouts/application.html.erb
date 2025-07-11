@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title><%= content_for(:title) || "Rootly AI Suggestions - Incident Replay" %></title>
+    <title><%= content_for(:title) || "Incident Replay" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -19,6 +19,9 @@
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app if defined?(stylesheet_link_tag) %>
+    
+    <%# Include ActionCable via CDN for WebSocket support %>
+    <script src="https://unpkg.com/@rails/actioncable@7.0.0/app/assets/javascripts/action_cable.js"></script>
     
     <style>
       body {
@@ -49,7 +52,7 @@
 
   <body>
     <nav class="navbar">
-      <h1>Rootly Incident Replay Engine</h1>
+      <h1>Incident Replay</h1>
     </nav>
     
     <main class="main-content">

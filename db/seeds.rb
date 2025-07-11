@@ -7,3 +7,12 @@
 #   ["Action", "Comedy", "Drama", "Horror"].each do |genre_name|
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
+
+# Create a default incident for testing
+incident = Incident.find_or_create_by!(id: 1) do |i|
+  i.title = "Sample Incident - Web Tier Outage"
+  i.status = "active"
+  i.severity = "SEV-1"
+end
+
+puts "Created incident: #{incident.title} (ID: #{incident.id})"
