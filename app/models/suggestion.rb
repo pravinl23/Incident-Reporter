@@ -6,6 +6,9 @@ class Suggestion < ApplicationRecord
   # - status: :string (e.g., "new", "accepted", "dismissed")
   # - incident_id: :integer (to link to specific incident)
   # - confidence: :float (0.0 to 1.0 confidence score from AI)
+  # - accepted: :boolean (whether suggestion was accepted into incident record)
+  # - content_digest: :string (SHA-256 hash for deduplication)
+  # - duplicate_count: :integer (number of times this suggestion was generated)
   
   validates :content, presence: true
   validates :suggestion_type, presence: true, inclusion: { 
@@ -14,16 +17,10 @@ class Suggestion < ApplicationRecord
   validates :status, inclusion: { in: %w[new accepted dismissed] }, allow_nil: true
   
   after_initialize :set_defaults
-  after_create :print_suggestion
   
   private
   
   def set_defaults
     self.status ||= 'new'
-  end
-
-  def print_suggestion
-    puts "**********************************************************************************************************************************************************************************************"
-    puts "New suggestion created: #{content}"
   end
 end

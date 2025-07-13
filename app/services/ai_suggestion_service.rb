@@ -1,4 +1,5 @@
 require 'openai'
+require 'digest'
 
 class AiSuggestionService
   def initialize(transcript_message, message_index)
@@ -25,96 +26,23 @@ class AiSuggestionService
     []
   end
 
-  # New method for function calling with GPT-4o-mini
+  # Advanced analysis with function calling
   def analyze_with_function_calling(context_messages, incident_id)
-    # Build context-aware prompt
     context = context_messages.join("\n")
     current = "#{@transcript_message['speaker']}: #{@transcript_message['text']}"
     
-    messages = [
-      {
-        role: :system,
-        content: "Analyze incident chat messages and identify actionable items."
-      },
-      {
-        role: :user,
-        content: <<~PROMPT
-          Context: #{context}
-          
-          Current: #{current}
-          
-          Identify action items, trigger events, root causes, or missing metadata.
-        PROMPT
-      }
-    ]
+    # First check for timeline events with regex
+    timeline_suggestions = detect_timeline_events(current)
     
-    # Define the function schema
-    functions = [{
-      name: "new_suggestion",
-      description: "Create a new incident suggestion",
-      parameters: {
-        type: "object",
-        properties: {
-          kind: {
-            type: "string",
-            enum: ["action_item", "trigger_event", "root_cause_theory", "missing_metadata"],
-            description: "The type of suggestion"
-          },
-          message: {
-            type: "string",
-            description: "The suggestion content"
-          },
-          confidence: {
-            type: "number",
-            minimum: 0,
-            maximum: 1,
-            description: "Confidence score (0-1)"
-          },
-          source_transcript_index: {
-            type: "integer",
-            description: "Index of the source message"
-          }
-        },
-        required: ["kind", "message", "source_transcript_index"]
-      }
-    }]
+    # Then get AI suggestions
+    ai_suggestions = get_ai_suggestions(context, current, incident_id)
     
-    suggestions = []
+    all_suggestions = timeline_suggestions + ai_suggestions
     
-    begin
-      response = @client.chat.completions.create(
-        model: "gpt-4o-mini",
-        messages: messages,
-        functions: functions,
-        function_call: "auto",
-        temperature: 0.3,
-        max_tokens: 1000
-      )
-      
-      if response.choices && response.choices.first.message.function_call
-        function_call = response.choices.first.message.function_call
-        
-        if function_call.name == "new_suggestion"
-          args = JSON.parse(function_call.arguments)
-          
-          suggestion = Suggestion.create!(
-            content: args["message"],
-            suggestion_type: args["kind"],
-            source_transcript_index: args["source_transcript_index"] || @message_index,
-            incident_id: incident_id,
-            confidence: args["confidence"] || 0.8,
-            status: 'new'
-          )
-          
-          suggestions << suggestion
-        end
-      end
-      
-    rescue => e
-      Rails.logger.error "AiSuggestionService error: #{e.message}"
-    end
+    # Deduplicate and merge
+    deduplicated_suggestions = deduplicate_suggestions(all_suggestions, incident_id)
     
-    suggestions
+    deduplicated_suggestions
   end
 
   private
@@ -173,5 +101,251 @@ class AiSuggestionService
     end
   rescue JSON::ParserError => e
     []
+  end
+
+  def detect_timeline_events(message)
+    suggestions = []
+    text = message.downcase
+    
+    # Rollback detection
+    if text.match?(/\b(rolling back|rollback\s+(started|initiated|beginning)|starting\s+rollback)\b/)
+      suggestions << create_suggestion_hash(
+        "Rollback initiated",
+        "trigger_event",
+        0.95
+      )
+    end
+    
+    # Resolution detection  
+    if text.match?(/\b(resolved|fixed|issue\s+is\s+resolved|impact\s+(mitigated|resolved))\b/)
+      suggestions << create_suggestion_hash(
+        "Issue resolved/impact mitigated",
+        "trigger_event", 
+        0.90
+      )
+    end
+    
+    # Root cause confirmation
+    if text.match?(/\b(root\s+cause|caused\s+by|identified\s+as|turns\s+out)\b/)
+      suggestions << create_suggestion_hash(
+        extract_root_cause(message),
+        "root_cause_theory",
+        0.85
+      )
+    end
+    
+    # Service impact detection
+    if text.match?(/\b(affected|impacted|down|degraded).*\b(service|api|database|web|analytics)\b/)
+      service = extract_affected_service(message)
+      suggestions << create_suggestion_hash(
+        "Record #{service} as affected service",
+        "missing_metadata",
+        0.80
+      )
+    end
+    
+    suggestions.compact
+  end
+
+  def get_ai_suggestions(context, current, incident_id)
+    messages = [
+      {
+        role: :system,
+        content: "Analyze incident messages and categorize findings precisely. Focus on timeline events, root causes, and actionable items."
+      },
+      {
+        role: :user,
+        content: "Context: #{context}\nCurrent: #{current}\n\nIdentify specific suggestions with appropriate types and realistic confidence."
+      }
+    ]
+    
+    functions = [{
+      name: "new_suggestion",
+      description: "Create a categorized incident suggestion",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["action_item", "trigger_event", "root_cause_theory", "missing_metadata"],
+            description: "Precise categorization of the suggestion"
+          },
+          message: {
+            type: "string",
+            description: "Concise, specific suggestion content"
+          },
+          confidence: {
+            type: "number",
+            minimum: 0.5,
+            maximum: 0.95,
+            description: "Realistic confidence based on clarity and specificity"
+          }
+        },
+        required: ["kind", "message", "confidence"]
+      }
+    }]
+    
+    suggestions = []
+    
+    begin
+      response = @client.chat.completions.create(
+        model: "gpt-4o-mini",
+        messages: messages,
+        functions: functions,
+        function_call: "auto",
+        temperature: 0.2,
+        max_tokens: 800,
+        logprobs: true,
+        top_logprobs: 5
+      )
+      
+      if response.choices && response.choices.first.message.function_call
+        function_call = response.choices.first.message.function_call
+        
+        if function_call.name == "new_suggestion"
+          args = JSON.parse(function_call.arguments)
+          
+          # Map logprobs to confidence if available
+          adjusted_confidence = adjust_confidence_from_logprobs(
+            args["confidence"], 
+            response.choices.first.logprobs
+          )
+          
+          suggestions << create_suggestion_hash(
+            args["message"],
+            args["kind"],
+            adjusted_confidence
+          )
+        end
+      end
+      
+    rescue => e
+      Rails.logger.error "AI suggestion error: #{e.message}"
+    end
+    
+    suggestions
+  end
+
+  def create_suggestion_hash(content, type, confidence)
+    {
+      content: content,
+      suggestion_type: type,
+      confidence: confidence,
+      source_transcript_index: @message_index,
+      content_digest: Digest::SHA256.hexdigest(content.downcase.strip)
+    }
+  end
+
+  def deduplicate_suggestions(suggestions, incident_id)
+    created_suggestions = []
+    
+    suggestions.each do |suggestion_data|
+      digest = suggestion_data[:content_digest]
+      
+      # Check for existing suggestion with same digest
+      existing = Suggestion.find_by(
+        incident_id: incident_id,
+        content_digest: digest
+      )
+      
+      if existing
+        # Increment duplicate count
+        existing.update(duplicate_count: existing.duplicate_count + 1)
+        created_suggestions << existing
+      else
+        # Apply similarity penalty
+        adjusted_confidence = apply_similarity_penalty(
+          suggestion_data[:content], 
+          suggestion_data[:confidence],
+          incident_id
+        )
+        
+        suggestion = Suggestion.create!(
+          content: suggestion_data[:content],
+          suggestion_type: suggestion_data[:suggestion_type],
+          source_transcript_index: suggestion_data[:source_transcript_index],
+          incident_id: incident_id,
+          confidence: adjusted_confidence,
+          status: 'new',
+          content_digest: digest
+        )
+        
+        created_suggestions << suggestion
+      end
+    end
+    
+    created_suggestions
+  end
+
+  def apply_similarity_penalty(content, confidence, incident_id)
+    recent_suggestions = Suggestion.where(incident_id: incident_id)
+                                  .where('created_at > ?', 5.minutes.ago)
+                                  .pluck(:content)
+    
+    # Simple similarity check - count common words
+    content_words = content.downcase.split(/\W+/).reject(&:empty?)
+    
+    max_similarity = recent_suggestions.map do |recent_content|
+      recent_words = recent_content.downcase.split(/\W+/).reject(&:empty?)
+      common_words = (content_words & recent_words).length
+      total_words = [content_words.length, recent_words.length].max
+      
+      total_words > 0 ? common_words.to_f / total_words : 0
+    end.max || 0
+    
+    # Penalize confidence for high similarity
+    if max_similarity > 0.7
+      confidence * 0.6  # Heavy penalty
+    elsif max_similarity > 0.5
+      confidence * 0.8  # Moderate penalty
+    else
+      confidence
+    end
+  end
+
+  def adjust_confidence_from_logprobs(base_confidence, logprobs)
+    return base_confidence unless logprobs
+    
+    # Use average logprob to adjust confidence
+    avg_logprob = logprobs.content&.map { |token| token.logprob }&.sum || 0
+    
+    if avg_logprob > -0.5
+      [base_confidence * 1.1, 0.95].min
+    elsif avg_logprob < -2.0
+      [base_confidence * 0.8, 0.5].max
+    else
+      base_confidence
+    end
+  end
+
+  def extract_root_cause(message)
+    # Extract meaningful root cause from message
+    text = message.downcase
+    
+    if text.include?("deploy")
+      "Issue related to recent deployment"
+    elsif text.include?("database") || text.include?("db")
+      "Database-related root cause identified"
+    elsif text.include?("memory") || text.include?("cpu")
+      "Resource exhaustion identified as cause"
+    else
+      "Root cause identified in discussion"
+    end
+  end
+
+  def extract_affected_service(message)
+    text = message.downcase
+    
+    if text.include?("web")
+      "Web service"
+    elsif text.include?("analytics")
+      "Analytics service"
+    elsif text.include?("api")
+      "API service"
+    elsif text.include?("database") || text.include?("db")
+      "Database"
+    else
+      "Service"
+    end
   end
 end 

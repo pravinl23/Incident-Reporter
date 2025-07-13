@@ -28,6 +28,7 @@ Rails.application.routes.draw do
   resources :suggestions, only: [] do
     member do
       post 'update_status'
+      post 'accept'
     end
   end
 

@@ -4,6 +4,20 @@
     
     <button id="start-replay" onclick="startReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Start Replay</button>
     <button id="stop-replay" onclick="stopReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">Stop Replay</button>
+    <button id="reset-replay" onclick="resetReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #ffc107; color: black; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">Reset</button>
+    <button onclick="exportAcceptedSuggestions()" style="padding: 10px 20px; font-size: 16px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Export Accepted</button>
+    
+    <div style="margin-left: 20px; display: inline-block;">
+      <label for="confidence-filter" style="font-size: 12px; color: #666;">Min Confidence:</label>
+      <select id="confidence-filter" onchange="filterSuggestions()" style="margin-left: 5px; padding: 5px;">
+        <option value="0">All (0%+)</option>
+        <option value="0.5">Low (50%+)</option>
+        <option value="0.7" selected>Medium (70%+)</option>
+        <option value="0.8">High (80%+)</option>
+        <option value="0.9">Very High (90%+)</option>
+      </select>
+    </div>
+    
     <span id="stats" style="margin-left: 20px; font-size: 12px; color: #666;"></span>
     
     <div id="messages" style="margin-top: 20px; font-family: monospace; line-height: 1.5; height: 600px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;"></div>
@@ -27,6 +41,7 @@
   let subscription;
   let pollingInterval;
   let stats = { filtered: 0, enqueued: 0, received: 0 };
+  let isReplayComplete = false;
 
   function initializeWebSocket() {
     let consumer;
@@ -70,25 +85,33 @@
   }
 
   function startReplay() {
+    const isStartingFresh = currentIndex === 0 || isReplayComplete;
+    
     document.getElementById('start-replay').disabled = true;
     document.getElementById('start-replay').style.display = 'none';
     document.getElementById('stop-replay').style.display = 'inline-block';
-    document.getElementById('messages').innerHTML = '';
-    document.getElementById('suggestions').innerHTML = '';
-    currentIndex = 0;
-    stats = { filtered: 0, enqueued: 0, received: 0 };
-    updateStats();
     
+    // Only clear everything if starting fresh
+    if (isStartingFresh) {
+      document.getElementById('messages').innerHTML = '';
+      document.getElementById('suggestions').innerHTML = '';
+      currentIndex = 0;
+      stats = { filtered: 0, enqueued: 0, received: 0 };
+      isReplayComplete = false;
+      
+      // Clear suggestions from database when starting fresh
+      fetch('/incidents/' + incidentId + '/clear_suggestions', { 
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
+    updateStats();
     initializeWebSocket();
     startPolling();
-    
-    fetch('/incidents/' + incidentId + '/clear_suggestions', { 
-      method: 'POST',
-      headers: {
-        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
-        'Content-Type': 'application/json'
-      }
-    });
     
     replayInterval = setInterval(function() {
       if (currentIndex < messages.length) {
@@ -132,10 +155,12 @@
         currentIndex++;
       } else {
         clearInterval(replayInterval);
+        isReplayComplete = true;
         document.getElementById('start-replay').disabled = false;
         document.getElementById('start-replay').style.display = 'inline-block';
         document.getElementById('start-replay').textContent = 'Replay Again';
         document.getElementById('stop-replay').style.display = 'none';
+        document.getElementById('reset-replay').style.display = 'none';
         
         // Keep WebSocket open for late-arriving suggestions
         setTimeout(() => {
@@ -163,18 +188,54 @@
     
     document.getElementById('start-replay').disabled = false;
     document.getElementById('start-replay').style.display = 'inline-block';
-    document.getElementById('start-replay').textContent = 'Start Replay';
+    
+    // Update button text and show reset button based on current state
+    if (currentIndex === 0 || isReplayComplete) {
+      document.getElementById('start-replay').textContent = 'Start Replay';
+      document.getElementById('reset-replay').style.display = 'none';
+    } else {
+      document.getElementById('start-replay').textContent = `Continue Replay (from message ${currentIndex + 1})`;
+      document.getElementById('reset-replay').style.display = 'inline-block';
+    }
+    
     document.getElementById('stop-replay').style.display = 'none';
     document.getElementById('queue-status').textContent = '(stopped)';
+  }
+  
+  function resetReplay() {
+    // Reset to beginning
+    currentIndex = 0;
+    isReplayComplete = false;
+    document.getElementById('messages').innerHTML = '';
+    document.getElementById('suggestions').innerHTML = '';
+    stats = { filtered: 0, enqueued: 0, received: 0 };
+    updateStats();
+    
+    // Clear suggestions from database
+    fetch('/incidents/' + incidentId + '/clear_suggestions', { 
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // Update button states
+    document.getElementById('start-replay').textContent = 'Start Replay';
+    document.getElementById('reset-replay').style.display = 'none';
   }
   
   function displaySuggestions(suggestions) {
     const suggestionsDiv = document.getElementById('suggestions');
     if (!suggestionsDiv) return;
     
-    suggestions.forEach(suggestion => {
+    // Apply confidence filter
+    const minConfidence = parseFloat(document.getElementById('confidence-filter').value);
+    const filteredSuggestions = suggestions.filter(s => (s.confidence || 0.8) >= minConfidence);
+    
+    filteredSuggestions.forEach(suggestion => {
       const suggestionCard = document.createElement('div');
-      suggestionCard.style.cssText = 'border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px; background-color: #f9f9f9;';
+      suggestionCard.style.cssText = 'border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 5px; background-color: #f9f9f9; cursor: pointer;';
       
       const typeColors = {
         'action_item': '#007bff',
@@ -183,30 +244,61 @@
         'missing_metadata': '#6c757d'
       };
       
+      const typeEmojis = {
+        'action_item': '📝',
+        'trigger_event': '🚨',
+        'root_cause_theory': '🧠',
+        'missing_metadata': '📊'
+      };
+      
       const typeLabels = {
         'action_item': 'Action Item',
         'trigger_event': 'Trigger Event',
-        'root_cause_theory': 'Root Cause Theory',
+        'root_cause_theory': 'Root Cause',
         'missing_metadata': 'Missing Metadata'
       };
       
       const confidence = suggestion.confidence ? ` (${Math.round(suggestion.confidence * 100)}%)` : '';
       
+      const duplicateCount = suggestion.duplicate_count > 1 ? ` × ${suggestion.duplicate_count}` : '';
+      const confidenceColor = suggestion.confidence > 0.8 ? '#28a745' : suggestion.confidence > 0.6 ? '#ffc107' : '#dc3545';
+      
       suggestionCard.innerHTML = `
-        <div style="color: ${typeColors[suggestion.suggestion_type] || '#000'}; font-weight: bold; margin-bottom: 5px;">
-          ${typeLabels[suggestion.suggestion_type] || suggestion.suggestion_type}${confidence}
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center;">
+            <span style="background: ${typeColors[suggestion.suggestion_type]}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px;">
+              ${typeEmojis[suggestion.suggestion_type]} ${typeLabels[suggestion.suggestion_type]}${duplicateCount}
+            </span>
+            <span style="font-size: 12px; color: ${confidenceColor}; font-weight: bold;">${confidence}</span>
+          </div>
+          <span id="accepted-${suggestion.id}" style="color: #28a745; display: none;">✓ Accepted</span>
         </div>
-        <div>${suggestion.content}</div>
-        <div style="margin-top: 5px; font-size: 11px; color: #999;">
-          Message #${suggestion.source_index || 'unknown'}
+        <div style="margin: 10px 0; font-size: 14px;" onclick="jumpToMessage(${suggestion.source_transcript_index || suggestion.source_index})">
+          ${suggestion.content}
         </div>
-        <div style="margin-top: 10px;">
-          <button onclick="acceptSuggestion(${suggestion.id})" style="margin-right: 5px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer;">Accept</button>
-          <button onclick="dismissSuggestion(${suggestion.id})" style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">Dismiss</button>
+        <div id="context-${suggestion.id}" style="display: none; background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px;">
+          <strong>Context:</strong><br/>
+          <div id="context-messages-${suggestion.id}"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+          <div>
+            <button onclick="showContext(${suggestion.id}, ${suggestion.source_transcript_index || suggestion.source_index}); event.stopPropagation();" style="margin-right: 5px; padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Context</button>
+            <button onclick="acceptSuggestion(${suggestion.id}); event.stopPropagation();" style="margin-right: 5px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Add to Record</button>
+          </div>
+          <div style="font-size: 11px; color: #999;">
+            Message #${suggestion.source_transcript_index || suggestion.source_index || 'unknown'}
+          </div>
         </div>
       `;
       
       suggestionCard.id = `suggestion-${suggestion.id}`;
+      
+      if (suggestion.accepted) {
+        suggestionCard.style.borderColor = '#28a745';
+        suggestionCard.style.backgroundColor = '#f0fff4';
+        document.getElementById(`accepted-${suggestion.id}`) && (document.getElementById(`accepted-${suggestion.id}`).style.display = 'inline');
+      }
+      
       suggestionsDiv.appendChild(suggestionCard);
       suggestionCard.scrollIntoView({ behavior: 'smooth' });
     });
@@ -230,7 +322,92 @@
   }
   
   function acceptSuggestion(id) {
-    updateSuggestionStatus(id, 'accepted');
+    fetch(`/suggestions/${id}/accept`, {
+      method: 'POST',
+      headers: {
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content,
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      const card = document.getElementById(`suggestion-${id}`);
+      if (card) {
+        card.style.borderColor = '#28a745';
+        card.style.backgroundColor = '#f0fff4';
+        const acceptedSpan = document.getElementById(`accepted-${id}`);
+        if (acceptedSpan) acceptedSpan.style.display = 'inline';
+      }
+    })
+    .catch(error => console.error('Error accepting suggestion:', error));
+  }
+  
+
+  
+  function showContext(suggestionId, messageIndex) {
+    const contextDiv = document.getElementById(`context-${suggestionId}`);
+    const contextMessagesDiv = document.getElementById(`context-messages-${suggestionId}`);
+    
+    if (contextDiv.style.display === 'none') {
+      // Show context - get 3 messages before the trigger, plus the trigger message
+      const startIdx = Math.max(0, messageIndex - 3);
+      const endIdx = messageIndex;
+      
+      // Check if we have any context to show
+      if (startIdx >= messageIndex) {
+        contextMessagesDiv.innerHTML = '<div style="color: #666; font-style: italic;">No previous messages available for context.</div>';
+      } else {
+        const contextMessages = messages.slice(startIdx, endIdx + 1);
+        
+        contextMessagesDiv.innerHTML = `
+          <div style="margin-bottom: 10px; font-size: 11px; color: #666; font-style: italic;">
+            Context shows the conversation leading up to this suggestion. The AI analyzed all these messages together.
+          </div>
+        ` + contextMessages.map((msg, idx) => {
+          const actualIndex = startIdx + idx;
+          const isCurrent = actualIndex === messageIndex;
+          return `<div style="margin: 5px 0; padding: 8px; border-radius: 4px; ${isCurrent ? 'border: 2px solid #007bff; background: #f8f9fa;' : 'border: 1px solid #e0e0e0; background: #fafafa;'}">
+            <div style="font-size: 10px; color: #666; margin-bottom: 3px;">Message #${actualIndex} ${isCurrent ? '(Triggered this suggestion)' : ''}</div>
+            <strong>${msg.speaker}:</strong> ${msg.text}
+          </div>`;
+        }).join('');
+      }
+      
+      contextDiv.style.display = 'block';
+    } else {
+      contextDiv.style.display = 'none';
+    }
+  }
+  
+  function jumpToMessage(messageIndex) {
+    if (messageIndex === null || messageIndex === undefined) return;
+    
+    // Find the message div in the transcript
+    const messagesDiv = document.getElementById('messages');
+    const messageElements = messagesDiv.children;
+    
+    if (messageIndex < messageElements.length) {
+      const targetMessage = messageElements[messageIndex];
+      
+      // Scroll to the message
+      targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Highlight it temporarily
+      const originalBg = targetMessage.style.backgroundColor;
+      targetMessage.style.backgroundColor = '#007bff';
+      targetMessage.style.color = 'white';
+      targetMessage.style.padding = '5px';
+      targetMessage.style.borderRadius = '3px';
+      targetMessage.style.transition = 'all 0.3s ease';
+      
+      // Remove highlight after 3 seconds
+      setTimeout(() => {
+        targetMessage.style.backgroundColor = originalBg;
+        targetMessage.style.color = '';
+        targetMessage.style.padding = '';
+        targetMessage.style.borderRadius = '';
+      }, 3000);
+    }
   }
   
   function dismissSuggestion(id) {
@@ -251,12 +428,85 @@
       const card = document.getElementById(`suggestion-${id}`);
       if (card) {
         card.style.opacity = '0.5';
-        card.querySelector('div:last-child').innerHTML = `<span style="color: ${status === 'accepted' ? 'green' : 'red'};">✓ ${status}</span>`;
       }
     })
     .catch(error => console.error('Error updating suggestion:', error));
   }
   
+  function exportAcceptedSuggestions() {
+    fetch(`/incidents/${incidentId}/suggestions`)
+      .then(response => response.json())
+      .then(data => {
+        const acceptedSuggestions = data.suggestions.filter(s => s.accepted);
+        
+        if (acceptedSuggestions.length === 0) {
+          alert('No accepted suggestions to export');
+          return;
+        }
+        
+        // Create markdown content
+        let content = '# Incident Report - Accepted Action Items\n\n';
+        content += `Date: ${new Date().toLocaleDateString()}\n\n`;
+        
+        const byType = {};
+        acceptedSuggestions.forEach(s => {
+          if (!byType[s.suggestion_type]) byType[s.suggestion_type] = [];
+          byType[s.suggestion_type].push(s);
+        });
+        
+        const typeHeaders = {
+          'action_item': '## 📝 Action Items',
+          'trigger_event': '## 🚨 Trigger Events',
+          'root_cause_theory': '## 🧠 Root Cause Analysis',
+          'missing_metadata': '## 📊 Missing Metadata'
+        };
+        
+        Object.keys(typeHeaders).forEach(type => {
+          if (byType[type] && byType[type].length > 0) {
+            content += `${typeHeaders[type]}\n\n`;
+            byType[type].forEach(s => {
+              content += `- ${s.content} (Message #${s.source_transcript_index || 'unknown'})\n`;
+            });
+            content += '\n';
+          }
+        });
+        
+        // Download file
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `incident_report_${incidentId}_${new Date().getTime()}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(error => console.error('Error exporting suggestions:', error));
+  }
+
+  function filterSuggestions() {
+    const minConfidence = parseFloat(document.getElementById('confidence-filter').value);
+    const allCards = document.querySelectorAll('[id^="suggestion-"]');
+    
+    allCards.forEach(card => {
+      const suggestionId = card.id.replace('suggestion-', '');
+      // This is a simple implementation - in production you'd store suggestion data
+      // For now, just show/hide based on confidence color
+      const confidenceSpan = card.querySelector('span[style*="font-weight: bold"]');
+      if (confidenceSpan) {
+        const confidenceText = confidenceSpan.textContent;
+        const confidence = parseInt(confidenceText.replace(/[()%]/g, '')) / 100;
+        
+        if (confidence >= minConfidence) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      }
+    });
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     // Ready
   });

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_10_230000) do
+ActiveRecord::Schema[8.0].define(version: 2025_07_11_190200) do
   create_table "incidents", force: :cascade do |t|
     t.string "title"
     t.string "status"
@@ -37,6 +37,11 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_10_230000) do
     t.integer "source_transcript_index"
     t.float "confidence"
     t.string "status", default: "new"
+    t.string "feedback"
+    t.boolean "accepted", default: false
+    t.string "content_digest"
+    t.integer "duplicate_count", default: 1
+    t.index ["content_digest"], name: "index_suggestions_on_content_digest"
     t.index ["incident_id"], name: "index_suggestions_on_incident_id"
   end
 

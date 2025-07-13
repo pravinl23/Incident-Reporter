@@ -3,7 +3,8 @@ class HeuristicFilter
     need should must let's remember investigate check follow rollback
     deploy restart fix update record log track document severity sev
     affected impact down issue problem error failing broken stuck timeout
-    cpu memory database db spike high low slow latency
+    cpu memory database db spike high low slow latency resolved fixed
+    mitigated root cause identified rolling starting initiated
   ].freeze
 
   SKIP_PATTERNS = [
@@ -23,6 +24,9 @@ class HeuristicFilter
     /\b(cpu|memory|disk|database|db|cache|queue)\s+(is|at|spike|high|low)/i,
     /\b(error|exception|timeout|latency|spike|threshold)\b/i,
     /\b(record|document|update|add|log|track)\s+(this|that|it)/i,
+    /\b(rolling back|rollback\s+(started|initiated)|starting\s+rollback)\b/i,
+    /\b(resolved|fixed|issue\s+is\s+resolved|impact\s+(mitigated|resolved))\b/i,
+    /\b(root\s+cause|caused\s+by|identified\s+as|turns\s+out)\b/i,
   ].freeze
 
   def self.pass?(message_text)

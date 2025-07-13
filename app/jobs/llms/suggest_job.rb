@@ -2,7 +2,6 @@ module Llms
   class SuggestJob < ApplicationJob
     queue_as :suggest
     
-    # Sidekiq options for performance
     sidekiq_options retry: 1, queue: :suggest
     
     def perform(message_data, message_index, incident_id, recent_messages = [])
@@ -22,7 +21,9 @@ module Llms
                 suggestion_type: s.suggestion_type,
                 status: s.status,
                 confidence: s.confidence,
-                source_index: message_index
+                source_transcript_index: s.source_transcript_index,
+                accepted: s.accepted,
+                duplicate_count: s.duplicate_count || 1
               }
             }
           }
