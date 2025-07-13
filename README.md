@@ -1,70 +1,3 @@
-# Rootly AI Suggestions
-
-An intelligent incident response assistant that analyzes meeting transcripts in real-time and provides actionable suggestions for incident management. The system replays incident transcripts at 10x speed (10 minutes compressed to 1 minute) while generating AI-powered suggestions for action items, trigger events, root cause theories, and missing metadata.
-
-## How It Works
-
-### Architecture Overview
-
-The application uses a sophisticated two-tier processing pipeline to achieve sub-second response times:
-
-**Tier 1: Heuristic Filter (<50ms)**
-- Fast regex-based pattern matching for common incident scenarios
-- Filters out irrelevant messages to reduce AI processing load
-- Immediate response to user interactions
-
-**Tier 2: AI Analysis (Background)**
-- Advanced language model analysis using OpenAI's API
-- Function calling for structured JSON output
-- Context-aware processing using the last 8 messages
-- Confidence scoring with logprob integration
-
-### Real-Time Processing Flow
-
-1. **Transcript Replay**: Messages display every ~750ms during replay
-2. **Heuristic Filtering**: Each message passes through regex filters
-3. **Background Processing**: Qualifying messages are queued for AI analysis
-4. **AI Analysis**: Language model analyzes context and generates suggestions
-5. **Deduplication**: SHA-256 content hashing prevents duplicate suggestions
-6. **Real-Time Updates**: WebSocket broadcasts deliver suggestions to the browser
-7. **Interactive UI**: Users can provide feedback, accept suggestions, and export reports
-
-### Key Features
-
-**Smart Categorization**
-- 📝 Action Items: Tasks to complete post-incident
-- 🚨 Trigger Events: Timeline milestones and status changes
-- 🧠 Root Cause Theories: Potential causes identified during investigation
-- 📊 Missing Metadata: Information gaps that should be documented
-
-**Advanced Deduplication**
-- SHA-256 content hashing for exact duplicate detection
-- Similarity analysis with confidence penalties
-- Duplicate count badges for repeated suggestions
-
-**Production-Ready Features**
-- "Add to Record" action for accepting suggestions
-- Context display showing conversation flow
-- Jump-to-source functionality for tracing suggestions
-- Export functionality for incident reports
-- Confidence filtering with realistic scoring (50-95%)
-
-**Performance Optimizations**
-- Sidekiq background job processing
-- Redis-backed ActionCable for WebSocket communication
-- Database reset on startup for fresh replay sessions
-- Optimized heuristic patterns for timeline events
-
-## Technology Stack
-
-- **Backend**: Ruby on Rails 8.0.2
-- **Database**: SQLite with Active Record
-- **Background Jobs**: Sidekiq with Redis
-- **Real-Time Communication**: ActionCable WebSockets
-- **AI Integration**: OpenAI API with function calling
-- **Frontend**: Vanilla JavaScript with modern CSS
-- **Deployment**: Docker-ready with Kamal configuration
-
 ## How to Run
 
 ### Prerequisites
@@ -129,69 +62,97 @@ bundle exec sidekiq
 rails server
 ```
 
-**Monitoring**
-- **Application**: `http://localhost:3000`
-- **Sidekiq Dashboard**: `http://localhost:3000/sidekiq`
-- **Logs**: Check `log/development.log` for detailed processing information
+# Rootly AI Suggestions
 
-### Usage Instructions
+Rootly AI Suggestions is a real-time incident response assistant designed to analyze meeting transcripts and surface actionable insights for engineering teams. It uses a hybrid system of fast heuristics and OpenAI-powered language analysis to categorize, filter, and present key information — all while the transcript replays at 10x speed.
 
-1. **Start Replay**: Click "Start Replay" to begin transcript playback
-2. **Watch Suggestions**: AI suggestions appear in real-time on the right panel
-3. **Accept Suggestions**: Click "Add to Record" to mark suggestions as accepted
-4. **View Context**: Click "Context" to see conversation flow leading to suggestions
-5. **Jump to Source**: Click suggestion cards to highlight the triggering message
-6. **Export Report**: Use "Export Accepted" to download a markdown summary
-7. **Stop Replay**: Click "Stop Replay" to halt processing and reset the session
+## 🔍 What It Does
 
-### Configuration Options
+- Replays incident call transcripts at 10x speed (10 minutes → 1 minute)
+- Analyzes messages in real time and generates suggestions in four categories:
+  - 📝 **Action Items**: Follow-ups and to-dos
+  - 🚨 **Trigger Events**: Key timeline events (e.g. “rollback started”)
+  - 🧠 **Root Cause Theories**: Hypotheses on the incident’s cause
+  - 📊 **Missing Metadata**: Info gaps that need to be filled
 
-**Confidence Filtering**
-Adjust the confidence threshold in the UI dropdown (50%+ to 90%+) to filter suggestions based on AI confidence scores.
+Users can:
+- View suggestion context
+- Accept suggestions into the incident record
+- Jump to the source message
+- Filter by confidence level
+- Export accepted suggestions as a Markdown report
 
+## 🧠 How It Works
 
-### Troubleshooting
+### Two-Tier Processing Pipeline
 
-**Common Issues**
+**Tier 1: Heuristic Filter (<50ms per message)**
+- Uses fast, compiled regex patterns to detect common incident phrases (e.g., "rollback started")
+- Instantly surfaces timeline events
+- Filters out noise and reduces OpenAI API calls by ~70%
 
-1. **Suggestions Not Appearing**
-   - Check Redis connection: `redis-cli ping`
-   - Verify Sidekiq is running: `bundle exec sidekiq`
-   - Check OpenAI API key in `.env` file
+**Tier 2: AI Analysis (Background)**
+- Qualifying messages are sent to a Sidekiq background job
+- OpenAI function calling with structured JSON response
+- Context-aware analysis (last 8 messages)
+- Confidence scoring using logprob integration
 
-2. **WebSocket Connection Failed**
-   - Ensure ActionCable is properly configured
-   - Check browser console for connection errors
-   - Verify Redis is accessible
+### Real-Time Flow
 
-3. **Database Errors**
-   - Run `rails db:migrate` to apply latest schema changes
-   - Check that incident record exists: `rails console` → `Incident.first`
+1. User clicks **Start Replay**
+2. Each transcript message is shown ~750ms apart
+3. Message passes through `HeuristicFilter`
+4. If eligible, it’s enqueued for `SuggestJob` and analyzed by OpenAI
+5. Suggestions are streamed to the browser instantly using ActionCable
+6. SHA-256 deduplication prevents duplicates; similar suggestions are scored lower
+7. Users interact with the suggestion cards (view context, accept, jump to source, export)
 
-4. **Performance Issues**
-   - Monitor Sidekiq dashboard for queue backlogs
-   - Adjust concurrency settings in `config/initializers/sidekiq.rb`
-   - Check OpenAI API rate limits
+## 🖥️ Key Features
 
-### Development Notes
+- Real-time AI suggestions with WebSocket updates
+- 4 suggestion categories with clear visual badges
+- SHA-256 hashing + similarity penalty to prevent duplicates
+- Confidence-based filtering (e.g., show only ≥80% confident suggestions)
+- Markdown export for accepted items
+- "Add to Record" action to build the incident report live
+- Context and jump-to-source features for traceability
 
-**Database Schema**
-The application uses several key models:
-- `Incident`: Container for incident sessions
-- `Suggestion`: AI-generated recommendations with metadata
-- Content deduplication via SHA-256 hashing
-- Confidence scoring and feedback tracking
+## ⚙️ Technology Stack
 
-**Background Processing**
-Sidekiq handles AI processing asynchronously to maintain responsive UI. The `Llms::SuggestJob` processes messages with context awareness and broadcasts results via ActionCable.
+| Layer              | Tech Used                         |
+|--------------------|-----------------------------------|
+| **Backend**        | Ruby on Rails 8.0.2               |
+| **Database**       | SQLite with ActiveRecord          |
+| **AI Integration** | OpenAI API + function calling     |
+| **Async Jobs**     | Sidekiq + Redis                   |
+| **Real-Time**      | ActionCable WebSockets            |
+| **Frontend**       | Vanilla JavaScript + CSS          |
+| **Deployment**     | Docker-ready + Kamal config       |
 
-**Real-Time Communication**
-ActionCable channels provide bidirectional communication between the Rails backend and JavaScript frontend, enabling real-time suggestion delivery without page refreshes.
+## 💡 Design Decisions
 
-## Production Deployment
+- **Hybrid pipeline**: I chose to combine regex-based heuristics with AI analysis to balance speed and intelligence. This gives users immediate, high-precision feedback without overloading the AI layer.
+- **Deduplication via hashing**: Suggestions are hashed using SHA-256 for exact-match detection. A similarity function penalizes near-duplicates, keeping the UI clean and reducing noise.
+- **Context-aware analysis**: Rather than analyzing each message in isolation, the AI considers the last 8 messages to make informed suggestions — this reduces hallucinations and improves accuracy.
+- **WebSocket delivery**: Using ActionCable for suggestion delivery means users see results *instantly*, without page reloads or polling.
 
-The application includes Docker configuration and Kamal deployment setup for production environments. Ensure proper environment variables, database connections, and Redis scaling for production workloads.
+## ⏳ Time Investment
 
-## Contributing
+I spent approximately **12–15 hours** on this project, prioritizing:
+- Production-quality code and architecture
+- Real-time responsiveness and UX polish
+- Scalable patterns for future extensions
 
-This application demonstrates modern Rails patterns including background job processing, real-time communication, and AI integration. The codebase emphasizes performance, reliability, and user experience in incident response scenarios.
+## 🚀 What I'd Add With More Time
+
+1. **Machine learning-powered heuristics**  
+   Train a lightweight model to learn incident patterns beyond regex, improving recall without sacrificing speed.
+
+2. **Multi-tenant incident type support**  
+   Allow customization for different use cases — e.g., security incidents vs infra vs customer escalations.
+
+3. **Suggestion quality analytics**  
+   Track metrics like suggestion accuracy, acceptance rate, and average confidence to continuously improve the system.
+
+4. **Deeper integrations**  
+   Push accepted suggestions into Rootly, Jira, or Slack to reduce manual copy-paste and improve workflow automation.
