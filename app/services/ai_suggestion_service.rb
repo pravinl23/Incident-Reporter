@@ -39,8 +39,8 @@ class AiSuggestionService
     
     all_suggestions = timeline_suggestions + ai_suggestions
     
-    # Deduplicate and merge
-    deduplicated_suggestions = deduplicate_suggestions(all_suggestions, incident_id)
+    # Enhanced deduplicate and merge
+    deduplicated_suggestions = deduplicate_suggestions_enhanced(all_suggestions, incident_id)
     
     deduplicated_suggestions
   end
@@ -151,7 +151,7 @@ class AiSuggestionService
     messages = [
       {
         role: :system,
-        content: "Analyze incident messages and categorize findings precisely. Focus on timeline events, root causes, and actionable items."
+        content: "Analyze incident messages and categorize findings precisely. Focus on timeline events, root causes, and actionable items. Be specific and avoid generating similar suggestions for the same issue."
       },
       {
         role: :user,
@@ -236,36 +236,49 @@ class AiSuggestionService
     }
   end
 
-  def deduplicate_suggestions(suggestions, incident_id)
+  def deduplicate_suggestions_enhanced(suggestions, incident_id)
     created_suggestions = []
     
     suggestions.each do |suggestion_data|
       digest = suggestion_data[:content_digest]
       
-      # Check for existing suggestion with same digest
+      # Check for existing suggestion with same digest (exact match)
       existing = Suggestion.find_by(
         incident_id: incident_id,
         content_digest: digest
       )
       
       if existing
-        # Increment duplicate count
+        # Increment duplicate count for exact matches
         existing.update(duplicate_count: existing.duplicate_count + 1)
         created_suggestions << existing
-      else
-        # Apply similarity penalty
-        adjusted_confidence = apply_similarity_penalty(
-          suggestion_data[:content], 
-          suggestion_data[:confidence],
-          incident_id
+        next
+      end
+      
+      # Check for semantic similarity with recent suggestions
+      similar_suggestion = find_similar_suggestion(suggestion_data, incident_id)
+      
+      if similar_suggestion
+        # Update existing similar suggestion instead of creating new one
+        Rails.logger.info "Merging similar suggestion: '#{suggestion_data[:content]}' with existing: '#{similar_suggestion.content}'"
+        
+        # Merge information from both suggestions
+        merged_content = merge_suggestion_content(similar_suggestion.content, suggestion_data[:content])
+        similar_suggestion.update!(
+          content: merged_content,
+          duplicate_count: similar_suggestion.duplicate_count + 1,
+          confidence: [similar_suggestion.confidence, suggestion_data[:confidence]].max
         )
         
+        created_suggestions << similar_suggestion
+      else
+        # Create new suggestion
         suggestion = Suggestion.create!(
           content: suggestion_data[:content],
           suggestion_type: suggestion_data[:suggestion_type],
           source_transcript_index: suggestion_data[:source_transcript_index],
           incident_id: incident_id,
-          confidence: adjusted_confidence,
+          confidence: suggestion_data[:confidence],
           status: 'new',
           content_digest: digest
         )
@@ -274,12 +287,94 @@ class AiSuggestionService
       end
     end
     
-    created_suggestions
+    created_suggestions.uniq
+  end
+
+  def find_similar_suggestion(suggestion_data, incident_id)
+    # Get recent suggestions of the same type
+    recent_suggestions = Suggestion.where(
+      incident_id: incident_id,
+      suggestion_type: suggestion_data[:suggestion_type]
+    ).where('created_at > ?', 10.minutes.ago)
+    
+    suggestion_content = suggestion_data[:content].downcase
+    
+    # Check for high semantic similarity
+    recent_suggestions.each do |existing|
+      similarity = calculate_semantic_similarity(suggestion_content, existing.content.downcase)
+      
+      if similarity > 0.75 # High similarity threshold
+        return existing
+      end
+    end
+    
+    nil
+  end
+
+  def calculate_semantic_similarity(text1, text2)
+    # Normalize texts
+    words1 = normalize_text(text1)
+    words2 = normalize_text(text2)
+    
+    # Calculate Jaccard similarity
+    intersection = (words1 & words2).length
+    union = (words1 | words2).length
+    
+    return 0.0 if union == 0
+    
+    jaccard = intersection.to_f / union
+    
+    # Boost similarity for key technical terms
+    key_terms_match = calculate_key_terms_similarity(text1, text2)
+    
+    # Weighted average: 60% Jaccard, 40% key terms
+    (jaccard * 0.6) + (key_terms_match * 0.4)
+  end
+
+  def normalize_text(text)
+    text.downcase
+        .gsub(/[^\w\s]/, ' ')  # Remove punctuation
+        .split(/\s+/)          # Split into words
+        .reject { |word| word.length < 3 }  # Remove short words
+        .reject { |word| %w[the and but for are was been have has had will would could should].include?(word) }  # Remove common words
+  end
+
+  def calculate_key_terms_similarity(text1, text2)
+    # Technical terms that should be weighted more heavily
+    key_terms = %w[
+      database postgres cpu memory latency app servers elevated
+      pegged utilization bottleneck performance auth sessions
+      reads writes queries connection pool timeout error
+      deploy deployment rollback restart service api web
+      root cause issue resolved fixed mitigated impact
+      spike high low degraded failing broken timeout
+    ]
+    
+    terms1 = key_terms.select { |term| text1.include?(term) }
+    terms2 = key_terms.select { |term| text2.include?(term) }
+    
+    return 0.0 if terms1.empty? && terms2.empty?
+    
+    intersection = (terms1 & terms2).length
+    union = (terms1 | terms2).length
+    
+    intersection.to_f / union
+  end
+
+  def merge_suggestion_content(existing_content, new_content)
+    # Simple merge: if new content has more specific information, use it
+    if new_content.length > existing_content.length && new_content.include?(existing_content.split(' ')[0..5].join(' '))
+      new_content
+    else
+      existing_content
+    end
   end
 
   def apply_similarity_penalty(content, confidence, incident_id)
+    # This method is now less important since we're doing proper deduplication
+    # but keeping it for additional penalty on edge cases
     recent_suggestions = Suggestion.where(incident_id: incident_id)
-                                  .where('created_at > ?', 5.minutes.ago)
+                                  .where('created_at > ?', 3.minutes.ago)
                                   .pluck(:content)
     
     # Simple similarity check - count common words
@@ -295,9 +390,9 @@ class AiSuggestionService
     
     # Penalize confidence for high similarity
     if max_similarity > 0.7
-      confidence * 0.6  # Heavy penalty
+      confidence * 0.5  # Heavy penalty
     elsif max_similarity > 0.5
-      confidence * 0.8  # Moderate penalty
+      confidence * 0.7  # Moderate penalty
     else
       confidence
     end

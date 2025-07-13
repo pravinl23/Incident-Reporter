@@ -1,36 +1,303 @@
-<div style="padding: 20px; display: flex; gap: 20px;">
-  <div style="flex: 1;">
-    <h2>Incident Transcript Replay</h2>
-    
-    <button id="start-replay" onclick="startReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Start Replay</button>
-    <button id="stop-replay" onclick="stopReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">Stop Replay</button>
-    <button id="reset-replay" onclick="resetReplay()" style="padding: 10px 20px; font-size: 16px; background-color: #ffc107; color: black; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">Reset</button>
-    <button onclick="exportAcceptedSuggestions()" style="padding: 10px 20px; font-size: 16px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Export Accepted</button>
-    
-    <div style="margin-left: 20px; display: inline-block;">
-      <label for="confidence-filter" style="font-size: 12px; color: #666;">Min Confidence:</label>
-      <select id="confidence-filter" onchange="filterSuggestions()" style="margin-left: 5px; padding: 5px;">
-        <option value="0">All (0%+)</option>
-        <option value="0.5">Low (50%+)</option>
-        <option value="0.7" selected>Medium (70%+)</option>
-        <option value="0.8">High (80%+)</option>
-        <option value="0.9">Very High (90%+)</option>
-      </select>
+<div class="replay-container">
+  <div class="replay-section">
+    <div class="card">
+      <h2 class="text-primary">Incident Transcript Replay</h2>
+      
+      <div class="button-group">
+        <button id="start-replay" class="btn" onclick="startReplay()">Start Replay</button>
+        <button id="stop-replay" class="btn btn-secondary" onclick="stopReplay()" style="display: none;">Stop Replay</button>
+        <button id="reset-replay" class="btn btn-secondary" onclick="resetReplay()" style="display: none;">Reset</button>
+        <button class="btn btn-secondary" onclick="exportAcceptedSuggestions()">Export Accepted</button>
+      </div>
+      
+      <div class="controls">
+        <div class="form-group">
+          <label for="confidence-filter" class="form-label">Min Confidence:</label>
+          <select id="confidence-filter" class="form-control" onchange="filterSuggestions()">
+            <option value="0">All (0%+)</option>
+            <option value="0.5">Low (50%+)</option>
+            <option value="0.7" selected>Medium (70%+)</option>
+            <option value="0.8">High (80%+)</option>
+            <option value="0.9">Very High (90%+)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div id="messages" class="messages-container"></div>
     </div>
-    
-    <span id="stats" style="margin-left: 20px; font-size: 12px; color: #666;"></span>
-    
-    <div id="messages" style="margin-top: 20px; font-family: monospace; line-height: 1.5; height: 600px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;"></div>
   </div>
   
-  <div style="flex: 1;">
-    <h2>AI Suggestions <span id="queue-status" style="font-size: 12px; color: #999;"></span></h2>
-    
-    <div id="suggestions" style="margin-top: 20px; height: 600px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
-      <p style="color: #666;">Suggestions will appear here during replay.</p>
+  <div class="replay-section">
+    <div class="card">
+      <h2 class="text-primary">AI Suggestions <span id="queue-status" class="status-indicator text-muted"></span></h2>
+      
+      <div id="suggestions" class="suggestions-container">
+        <p class="text-muted">Suggestions will appear here during replay.</p>
+      </div>
     </div>
   </div>
 </div>
+
+<style>
+  /* Replay specific styles using solid colors */
+  .replay-container {
+    display: flex;
+    gap: 2rem;
+    padding: 0;
+    margin: 0;
+    align-items: flex-start;
+  }
+  
+  .replay-section {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .replay-section .card {
+    margin-bottom: 0;
+    height: calc(100vh - 160px);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .replay-section .card h2 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+  
+  .button-group {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  
+  .controls .form-group {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .controls .form-control {
+    width: auto;
+    min-width: 140px;
+  }
+  
+  .stats-text {
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  
+  .messages-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--color-surface-variant);
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: var(--color-surface);
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    line-height: 1.6;
+    font-size: 0.9rem;
+  }
+  
+  .suggestions-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--color-surface-variant);
+    border-radius: 8px;
+    padding: 1rem;
+    background-color: var(--color-surface);
+  }
+  
+  .status-indicator {
+    font-size: 0.8rem;
+    font-weight: normal;
+  }
+  
+  .message-item {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    background-color: var(--color-surface-variant);
+    border-left: 3px solid var(--color-accent);
+  }
+  
+  .message-speaker {
+    font-weight: 600;
+    color: var(--color-accent);
+    margin-right: 0.5rem;
+  }
+  
+  .suggestion-card {
+    border: 1px solid var(--color-surface-variant);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: var(--color-surface-variant);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .suggestion-card:hover {
+    border-color: var(--color-accent);
+    transform: translateY(-1px);
+  }
+  
+  .suggestion-card.accepted {
+    border-color: var(--color-success);
+    background-color: var(--color-surface);
+  }
+  
+  .suggestion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  
+  .suggestion-type {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  
+  .suggestion-type.action-item {
+    background-color: var(--color-info);
+  }
+  
+  .suggestion-type.trigger-event {
+    background-color: var(--color-success);
+  }
+  
+  .suggestion-type.root-cause {
+    background-color: var(--color-warning);
+  }
+  
+  .suggestion-type.missing-metadata {
+    background-color: var(--color-text-muted);
+  }
+  
+  .suggestion-content {
+    margin: 0.75rem 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+  }
+  
+  .suggestion-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+  }
+  
+  .suggestion-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .suggestion-buttons .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+  
+  .suggestion-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+  
+  .context-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-surface-variant);
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    display: none;
+  }
+  
+  .context-message {
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-surface-variant);
+    background-color: var(--color-surface-variant);
+  }
+  
+  .context-message.current {
+    border: 2px solid var(--color-accent);
+    background-color: var(--color-surface);
+  }
+  
+  .context-message-meta {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.25rem;
+  }
+  
+  .message-highlight {
+    background-color: var(--color-accent) !important;
+    color: var(--color-text-primary) !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 4px !important;
+    transition: all 0.3s ease !important;
+    border-left: 3px solid var(--color-text-primary) !important;
+  }
+  
+  @media (max-width: 1024px) {
+    .replay-container {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .replay-section .card {
+      height: auto;
+    }
+    
+    .messages-container,
+    .suggestions-container {
+      height: 400px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .button-group {
+      flex-wrap: wrap;
+    }
+    
+    .controls {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    
+    .controls .form-group {
+      width: 100%;
+    }
+    
+    .controls .form-control {
+      width: 100%;
+    }
+    
+    .messages-container,
+    .suggestions-container {
+      height: 300px;
+    }
+  }
+</style>
 
 <%= javascript_tag do %>
   const messages = <%= raw @messages.to_json %>;
@@ -42,6 +309,7 @@
   let pollingInterval;
   let stats = { filtered: 0, enqueued: 0, received: 0 };
   let isReplayComplete = false;
+  let autoScroll = true;
 
   function initializeWebSocket() {
     let consumer;
@@ -57,19 +325,52 @@
       {
         connected() {
           document.getElementById('queue-status').textContent = '(connected)';
+          console.log('WebSocket connected successfully');
         },
         
         disconnected() {
           document.getElementById('queue-status').textContent = '(disconnected)';
+          console.log('WebSocket disconnected');
         },
         
         received(data) {
-          stats.received++;
-          updateStats();
+          console.log('WebSocket received data:', data);
+          console.log('Data type:', data.type);
+          console.log('Current stats before processing:', { ...stats });
           
-          if (data.suggestions && data.suggestions.length > 0) {
+          if (data.type === 'job_completed') {
+            console.log('Processing job_completed message');
+            // Decrement enqueued counter since job is done
+            const oldEnqueued = stats.enqueued;
+            stats.enqueued = Math.max(0, stats.enqueued - 1);
+            console.log(`Decremented enqueued from ${oldEnqueued} to ${stats.enqueued}`);
+            
+            if (data.suggestions && data.suggestions.length > 0) {
+              console.log(`Job produced ${data.suggestions.length} suggestions`);
+              stats.received++;
+              displaySuggestions(data.suggestions);
+            } else {
+              console.log('Job completed with no suggestions');
+            }
+            
+          } else if (data.type === 'job_failed') {
+            console.log('Processing job_failed message');
+            // Decrement enqueued counter even for failed jobs
+            const oldEnqueued = stats.enqueued;
+            stats.enqueued = Math.max(0, stats.enqueued - 1);
+            console.log(`Decremented enqueued from ${oldEnqueued} to ${stats.enqueued} (failed job)`);
+            console.error(`Job failed for message ${data.message_index}:`, data.error);
+            
+          } else if (data.suggestions) {
+            console.log('Processing legacy suggestions message (no type field)');
+            // Backward compatibility for old message format
+            stats.received++;
             displaySuggestions(data.suggestions);
+          } else {
+            console.log('Received unknown message format:', data);
           }
+          
+          console.log('Current stats after processing:', { ...stats });
         },
         
         rejected() {
@@ -79,11 +380,6 @@
     );
   }
   
-  function updateStats() {
-    document.getElementById('stats').textContent = 
-      `Filtered: ${stats.filtered} | Enqueued: ${stats.enqueued} | Received: ${stats.received}`;
-  }
-
   function startReplay() {
     const isStartingFresh = currentIndex === 0 || isReplayComplete;
     
@@ -91,7 +387,7 @@
     document.getElementById('start-replay').style.display = 'none';
     document.getElementById('stop-replay').style.display = 'inline-block';
     
-    // Only clear everything if starting fresh
+    // Clear suggestions from database when starting fresh
     if (isStartingFresh) {
       document.getElementById('messages').innerHTML = '';
       document.getElementById('suggestions').innerHTML = '';
@@ -109,9 +405,11 @@
       });
     }
     
-    updateStats();
     initializeWebSocket();
     startPolling();
+    
+    // Enable auto-scroll during replay
+    autoScroll = true;
     
     replayInterval = setInterval(function() {
       if (currentIndex < messages.length) {
@@ -119,10 +417,19 @@
         
         // Display the message
         const messageDiv = document.createElement('div');
-        messageDiv.style.marginBottom = '10px';
-        messageDiv.innerHTML = `<strong>${message.speaker}:</strong> ${message.text}`;
-        document.getElementById('messages').appendChild(messageDiv);
-        messageDiv.scrollIntoView({ behavior: 'smooth' });
+        messageDiv.className = 'message-item';
+        messageDiv.innerHTML = `<span class="message-speaker">${message.speaker}:</span> ${message.text}`;
+        
+        const messagesContainer = document.getElementById('messages');
+        messagesContainer.appendChild(messageDiv);
+        
+        // Only auto-scroll if enabled and user hasn't scrolled up
+        if (autoScroll) {
+          const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 1;
+          if (isScrolledToBottom) {
+            messageDiv.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
         
         // Send message for analysis (now async with filter)
         const startTime = performance.now();
@@ -148,7 +455,6 @@
           } else if (data.status === 'enqueued') {
             stats.enqueued++;
           }
-          updateStats();
         })
         .catch(error => console.error('Error analyzing message:', error));
         
@@ -156,6 +462,7 @@
       } else {
         clearInterval(replayInterval);
         isReplayComplete = true;
+        autoScroll = false;
         document.getElementById('start-replay').disabled = false;
         document.getElementById('start-replay').style.display = 'inline-block';
         document.getElementById('start-replay').textContent = 'Replay Again';
@@ -186,6 +493,9 @@
       pollingInterval = null;
     }
     
+    // Disable auto-scroll when stopped
+    autoScroll = false;
+    
     document.getElementById('start-replay').disabled = false;
     document.getElementById('start-replay').style.display = 'inline-block';
     
@@ -206,10 +516,10 @@
     // Reset to beginning
     currentIndex = 0;
     isReplayComplete = false;
+    autoScroll = true;
     document.getElementById('messages').innerHTML = '';
     document.getElementById('suggestions').innerHTML = '';
     stats = { filtered: 0, enqueued: 0, received: 0 };
-    updateStats();
     
     // Clear suggestions from database
     fetch('/incidents/' + incidentId + '/clear_suggestions', { 
@@ -235,13 +545,13 @@
     
     filteredSuggestions.forEach(suggestion => {
       const suggestionCard = document.createElement('div');
-      suggestionCard.style.cssText = 'border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 5px; background-color: #f9f9f9; cursor: pointer;';
+      suggestionCard.className = `suggestion-card ${suggestion.accepted ? 'accepted' : ''}`;
       
-      const typeColors = {
-        'action_item': '#007bff',
-        'trigger_event': '#28a745',
-        'root_cause_theory': '#ffc107',
-        'missing_metadata': '#6c757d'
+      const typeClasses = {
+        'action_item': 'action-item',
+        'trigger_event': 'trigger-event',
+        'root_cause_theory': 'root-cause',
+        'missing_metadata': 'missing-metadata'
       };
       
       const typeEmojis = {
@@ -259,48 +569,52 @@
       };
       
       const confidence = suggestion.confidence ? ` (${Math.round(suggestion.confidence * 100)}%)` : '';
-      
       const duplicateCount = suggestion.duplicate_count > 1 ? ` × ${suggestion.duplicate_count}` : '';
-      const confidenceColor = suggestion.confidence > 0.8 ? '#28a745' : suggestion.confidence > 0.6 ? '#ffc107' : '#dc3545';
+      const confidenceClass = suggestion.confidence > 0.8 ? 'status-success' : suggestion.confidence > 0.6 ? 'status-warning' : 'status-error';
+      
+      // Skip if suggestion already exists to prevent duplicates in UI
+      if (document.getElementById(`suggestion-${suggestion.id}`)) {
+        console.log(`Skipping duplicate suggestion ${suggestion.id} in UI`);
+        return;
+      }
       
       suggestionCard.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center;">
-            <span style="background: ${typeColors[suggestion.suggestion_type]}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px;">
+        <div class="suggestion-header">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="suggestion-type ${typeClasses[suggestion.suggestion_type]}">
               ${typeEmojis[suggestion.suggestion_type]} ${typeLabels[suggestion.suggestion_type]}${duplicateCount}
             </span>
-            <span style="font-size: 12px; color: ${confidenceColor}; font-weight: bold;">${confidence}</span>
+            <span class="${confidenceClass}" style="font-size: 0.75rem; font-weight: bold;">${confidence}</span>
+            ${suggestion.duplicate_count > 1 ? '<span class="text-muted" style="font-size: 0.7rem;">(merged)</span>' : ''}
           </div>
-          <span id="accepted-${suggestion.id}" style="color: #28a745; display: none;">✓ Accepted</span>
+          <span id="accepted-${suggestion.id}" class="status-success" style="display: ${suggestion.accepted ? 'inline' : 'none'};">✓ Accepted</span>
         </div>
-        <div style="margin: 10px 0; font-size: 14px;" onclick="jumpToMessage(${suggestion.source_transcript_index || suggestion.source_index})">
+        <div class="suggestion-content" onclick="jumpToMessage(${suggestion.source_transcript_index || suggestion.source_index})">
           ${suggestion.content}
         </div>
-        <div id="context-${suggestion.id}" style="display: none; background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px;">
+        <div id="context-${suggestion.id}" class="context-panel">
           <strong>Context:</strong><br/>
           <div id="context-messages-${suggestion.id}"></div>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-          <div>
-            <button onclick="showContext(${suggestion.id}, ${suggestion.source_transcript_index || suggestion.source_index}); event.stopPropagation();" style="margin-right: 5px; padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Context</button>
-            <button onclick="acceptSuggestion(${suggestion.id}); event.stopPropagation();" style="margin-right: 5px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Add to Record</button>
+        <div class="suggestion-actions">
+          <div class="suggestion-buttons">
+            <button class="btn btn-secondary" onclick="showContext(${suggestion.id}, ${suggestion.source_transcript_index || suggestion.source_index}); event.stopPropagation();">Context</button>
+            <button class="btn" onclick="acceptSuggestion(${suggestion.id}); event.stopPropagation();">Add to Record</button>
           </div>
-          <div style="font-size: 11px; color: #999;">
+          <div class="suggestion-meta">
             Message #${suggestion.source_transcript_index || suggestion.source_index || 'unknown'}
+            ${suggestion.duplicate_count > 1 ? ` • ${suggestion.duplicate_count} similar` : ''}
           </div>
         </div>
       `;
       
       suggestionCard.id = `suggestion-${suggestion.id}`;
-      
-      if (suggestion.accepted) {
-        suggestionCard.style.borderColor = '#28a745';
-        suggestionCard.style.backgroundColor = '#f0fff4';
-        document.getElementById(`accepted-${suggestion.id}`) && (document.getElementById(`accepted-${suggestion.id}`).style.display = 'inline');
-      }
-      
       suggestionsDiv.appendChild(suggestionCard);
-      suggestionCard.scrollIntoView({ behavior: 'smooth' });
+      
+      // Only auto-scroll suggestions if not many are present
+      if (suggestionsDiv.children.length <= 3) {
+        suggestionCard.scrollIntoView({ behavior: 'smooth' });
+      }
     });
   }
 
@@ -310,15 +624,115 @@
         .then(response => response.json())
         .then(data => {
           if (data.suggestions && data.suggestions.length > 0) {
-            const currentCount = document.getElementById('suggestions').children.length;
-            if (data.suggestions.length > currentCount) {
-              const newSuggestions = data.suggestions.slice(currentCount);
+            // Check for new suggestions
+            const existingIds = Array.from(document.querySelectorAll('[id^="suggestion-"]'))
+              .map(el => parseInt(el.id.replace('suggestion-', '')));
+            
+            const newSuggestions = data.suggestions.filter(s => !existingIds.includes(s.id));
+            
+            if (newSuggestions.length > 0) {
+              console.log(`Displaying ${newSuggestions.length} new suggestions`);
               displaySuggestions(newSuggestions);
+              
+              // Update received count if we missed WebSocket messages
+              const totalSuggestionsDisplayed = document.querySelectorAll('[id^="suggestion-"]').length;
+              if (totalSuggestionsDisplayed > stats.received) {
+                console.log(`Adjusting received count from ${stats.received} to ${totalSuggestionsDisplayed}`);
+                stats.received = totalSuggestionsDisplayed;
+              }
             }
+            
+            // Check for updated suggestions (merged content)
+            data.suggestions.forEach(suggestion => {
+              const existingCard = document.getElementById(`suggestion-${suggestion.id}`);
+              if (existingCard) {
+                const existingDuplicateCount = existingCard.querySelector('.suggestion-meta').textContent.includes('similar') ? 
+                  parseInt(existingCard.querySelector('.suggestion-meta').textContent.match(/(\d+) similar/)?.[1] || '1') : 1;
+                
+                if (suggestion.duplicate_count > existingDuplicateCount) {
+                  console.log(`Updating suggestion ${suggestion.id} with merged content`);
+                  updateExistingSuggestion(suggestion);
+                }
+              }
+            });
+          }
+          
+          // Backup check: if replay is complete and we still have enqueued jobs, reset to 0
+          if (isReplayComplete && stats.enqueued > 0) {
+            console.log(`Replay complete but still showing ${stats.enqueued} enqueued jobs. Resetting to 0.`);
+            stats.enqueued = 0;
           }
         })
         .catch(error => console.error('Polling error:', error));
     }, 3000);
+  }
+  
+  function updateExistingSuggestion(suggestion) {
+    const existingCard = document.getElementById(`suggestion-${suggestion.id}`);
+    if (!existingCard) return;
+    
+    const typeClasses = {
+      'action_item': 'action-item',
+      'trigger_event': 'trigger-event',
+      'root_cause_theory': 'root-cause',
+      'missing_metadata': 'missing-metadata'
+    };
+    
+    const typeEmojis = {
+      'action_item': '📝',
+      'trigger_event': '🚨',
+      'root_cause_theory': '🧠',
+      'missing_metadata': '📊'
+    };
+    
+    const typeLabels = {
+      'action_item': 'Action Item',
+      'trigger_event': 'Trigger Event',
+      'root_cause_theory': 'Root Cause',
+      'missing_metadata': 'Missing Metadata'
+    };
+    
+    const confidence = suggestion.confidence ? ` (${Math.round(suggestion.confidence * 100)}%)` : '';
+    const duplicateCount = suggestion.duplicate_count > 1 ? ` × ${suggestion.duplicate_count}` : '';
+    const confidenceClass = suggestion.confidence > 0.8 ? 'status-success' : suggestion.confidence > 0.6 ? 'status-warning' : 'status-error';
+    
+    existingCard.innerHTML = `
+      <div class="suggestion-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span class="suggestion-type ${typeClasses[suggestion.suggestion_type]}">
+            ${typeEmojis[suggestion.suggestion_type]} ${typeLabels[suggestion.suggestion_type]}${duplicateCount}
+          </span>
+          <span class="${confidenceClass}" style="font-size: 0.75rem; font-weight: bold;">${confidence}</span>
+          ${suggestion.duplicate_count > 1 ? '<span class="text-muted" style="font-size: 0.7rem;">(merged)</span>' : ''}
+        </div>
+        <span id="accepted-${suggestion.id}" class="status-success" style="display: ${suggestion.accepted ? 'inline' : 'none'};">✓ Accepted</span>
+      </div>
+      <div class="suggestion-content" onclick="jumpToMessage(${suggestion.source_transcript_index || suggestion.source_index})">
+        ${suggestion.content}
+      </div>
+      <div id="context-${suggestion.id}" class="context-panel">
+        <strong>Context:</strong><br/>
+        <div id="context-messages-${suggestion.id}"></div>
+      </div>
+      <div class="suggestion-actions">
+        <div class="suggestion-buttons">
+          <button class="btn btn-secondary" onclick="showContext(${suggestion.id}, ${suggestion.source_transcript_index || suggestion.source_index}); event.stopPropagation();">Context</button>
+          <button class="btn" onclick="acceptSuggestion(${suggestion.id}); event.stopPropagation();">Add to Record</button>
+        </div>
+        <div class="suggestion-meta">
+          Message #${suggestion.source_transcript_index || suggestion.source_index || 'unknown'}
+          ${suggestion.duplicate_count > 1 ? ` • ${suggestion.duplicate_count} similar` : ''}
+        </div>
+      </div>
+    `;
+    
+    // Add a subtle animation to show the update
+    existingCard.style.backgroundColor = 'var(--color-accent)';
+    existingCard.style.transition = 'background-color 2s ease';
+    
+    setTimeout(() => {
+      existingCard.style.backgroundColor = existingCard.classList.contains('accepted') ? 'var(--color-surface)' : 'var(--color-surface-variant)';
+    }, 2000);
   }
   
   function acceptSuggestion(id) {
@@ -333,8 +747,7 @@
     .then(data => {
       const card = document.getElementById(`suggestion-${id}`);
       if (card) {
-        card.style.borderColor = '#28a745';
-        card.style.backgroundColor = '#f0fff4';
+        card.classList.add('accepted');
         const acceptedSpan = document.getElementById(`accepted-${id}`);
         if (acceptedSpan) acceptedSpan.style.display = 'inline';
       }
@@ -342,33 +755,31 @@
     .catch(error => console.error('Error accepting suggestion:', error));
   }
   
-
-  
   function showContext(suggestionId, messageIndex) {
     const contextDiv = document.getElementById(`context-${suggestionId}`);
     const contextMessagesDiv = document.getElementById(`context-messages-${suggestionId}`);
     
-    if (contextDiv.style.display === 'none') {
+    if (contextDiv.style.display === 'none' || !contextDiv.style.display) {
       // Show context - get 3 messages before the trigger, plus the trigger message
       const startIdx = Math.max(0, messageIndex - 3);
       const endIdx = messageIndex;
       
       // Check if we have any context to show
       if (startIdx >= messageIndex) {
-        contextMessagesDiv.innerHTML = '<div style="color: #666; font-style: italic;">No previous messages available for context.</div>';
+        contextMessagesDiv.innerHTML = '<div class="text-muted" style="font-style: italic;">No previous messages available for context.</div>';
       } else {
         const contextMessages = messages.slice(startIdx, endIdx + 1);
         
         contextMessagesDiv.innerHTML = `
-          <div style="margin-bottom: 10px; font-size: 11px; color: #666; font-style: italic;">
+          <div class="text-muted" style="margin-bottom: 0.5rem; font-size: 0.7rem; font-style: italic;">
             Context shows the conversation leading up to this suggestion. The AI analyzed all these messages together.
           </div>
         ` + contextMessages.map((msg, idx) => {
           const actualIndex = startIdx + idx;
           const isCurrent = actualIndex === messageIndex;
-          return `<div style="margin: 5px 0; padding: 8px; border-radius: 4px; ${isCurrent ? 'border: 2px solid #007bff; background: #f8f9fa;' : 'border: 1px solid #e0e0e0; background: #fafafa;'}">
-            <div style="font-size: 10px; color: #666; margin-bottom: 3px;">Message #${actualIndex} ${isCurrent ? '(Triggered this suggestion)' : ''}</div>
-            <strong>${msg.speaker}:</strong> ${msg.text}
+          return `<div class="context-message ${isCurrent ? 'current' : ''}">
+            <div class="context-message-meta">Message #${actualIndex} ${isCurrent ? '(Triggered this suggestion)' : ''}</div>
+            <span class="message-speaker">${msg.speaker}:</span> ${msg.text}
           </div>`;
         }).join('');
       }
@@ -382,6 +793,9 @@
   function jumpToMessage(messageIndex) {
     if (messageIndex === null || messageIndex === undefined) return;
     
+    // Disable auto-scroll temporarily
+    autoScroll = false;
+    
     // Find the message div in the transcript
     const messagesDiv = document.getElementById('messages');
     const messageElements = messagesDiv.children;
@@ -393,19 +807,11 @@
       targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
       
       // Highlight it temporarily
-      const originalBg = targetMessage.style.backgroundColor;
-      targetMessage.style.backgroundColor = '#007bff';
-      targetMessage.style.color = 'white';
-      targetMessage.style.padding = '5px';
-      targetMessage.style.borderRadius = '3px';
-      targetMessage.style.transition = 'all 0.3s ease';
+      targetMessage.classList.add('message-highlight');
       
       // Remove highlight after 3 seconds
       setTimeout(() => {
-        targetMessage.style.backgroundColor = originalBg;
-        targetMessage.style.color = '';
-        targetMessage.style.padding = '';
-        targetMessage.style.borderRadius = '';
+        targetMessage.classList.remove('message-highlight');
       }, 3000);
     }
   }
@@ -493,7 +899,7 @@
       const suggestionId = card.id.replace('suggestion-', '');
       // This is a simple implementation - in production you'd store suggestion data
       // For now, just show/hide based on confidence color
-      const confidenceSpan = card.querySelector('span[style*="font-weight: bold"]');
+      const confidenceSpan = card.querySelector('.status-success, .status-warning, .status-error');
       if (confidenceSpan) {
         const confidenceText = confidenceSpan.textContent;
         const confidence = parseInt(confidenceText.replace(/[()%]/g, '')) / 100;
@@ -507,8 +913,28 @@
     });
   }
 
-  window.addEventListener('DOMContentLoaded', () => {
-    // Ready
+  // Detect user scrolling in messages container
+  document.addEventListener('DOMContentLoaded', function() {
+    const messagesContainer = document.getElementById('messages');
+    let scrollTimeout;
+    
+    messagesContainer.addEventListener('scroll', function() {
+      // Disable auto-scroll when user manually scrolls
+      if (replayInterval) { // Only if replay is active
+        autoScroll = false;
+        
+        // Clear previous timeout
+        clearTimeout(scrollTimeout);
+        
+        // Re-enable auto-scroll after 3 seconds of no scrolling
+        scrollTimeout = setTimeout(() => {
+          const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + 1;
+          if (isScrolledToBottom) {
+            autoScroll = true;
+          }
+        }, 3000);
+      }
+    });
   });
 
   // Cleanup on page unload
