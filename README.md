@@ -138,10 +138,10 @@ Users can:
 
 ## ⏳ Time Investment
 
-I spent approximately **12–15 hours** on this project, prioritizing:
-- Production-quality code and architecture
-- Real-time responsiveness and UX polish
-- Scalable patterns for future extensions
+I spent approximately **8 hours** on this project across 3 days
+The first 3 hours were spent just getting familiar with ruby for the first time
+Then the next 4 were spent just trying to get a working barebone mvp working
+The last hour was spent fixing ui and small bugs
 
 ## 🚀 What I'd Add With More Time
 
@@ -150,9 +150,3 @@ I spent approximately **12–15 hours** on this project, prioritizing:
 
 2. **Multi-tenant incident type support**  
    Allow customization for different use cases — e.g., security incidents vs infra vs customer escalations.
-
-3. **Suggestion quality analytics**  
-   Track metrics like suggestion accuracy, acceptance rate, and average confidence to continuously improve the system.
-
-4. **Deeper integrations**  
-   Push accepted suggestions into Rootly, Jira, or Slack to reduce manual copy-paste and improve workflow automation.
