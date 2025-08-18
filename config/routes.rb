@@ -1,9 +1,16 @@
-require 'sidekiq/web'
+require "sidekiq/web"
 
 Rails.application.routes.draw do
   # Mount Sidekiq web UI for monitoring
-  mount Sidekiq::Web => '/sidekiq'
-  
+  if Rails.env.production?
+    Sidekiq::Web.use Rack::Auth::Basic do |username, password|
+      secure_user = ActiveSupport::SecurityUtils.secure_compare(username, ENV.fetch("SIDEKIQ_USERNAME", ""))
+      secure_pass = ActiveSupport::SecurityUtils.secure_compare(password, ENV.fetch("SIDEKIQ_PASSWORD", ""))
+      secure_user & secure_pass
+    end
+  end
+  mount Sidekiq::Web => "/sidekiq"
+
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
@@ -17,18 +24,18 @@ Rails.application.routes.draw do
   # Incident routes
   resources :incidents do
     member do
-      get 'replay'
-      post 'analyze_message'
-      post 'clear_suggestions'
-      get 'suggestions'
+      get "replay"
+      post "analyze_message"
+      post "clear_suggestions"
+      get "suggestions"
     end
   end
-  
+
   # Suggestion routes
   resources :suggestions, only: [] do
     member do
-      post 'update_status'
-      post 'accept'
+      post "update_status"
+      post "accept"
     end
   end
 

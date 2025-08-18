@@ -12,7 +12,7 @@
 1. **Clone and Setup**
    ```bash
    git clone <repository-url>
-   cd rootly_ai_suggestions
+   cd ai_suggestions
    bundle install
    ```
 
@@ -62,9 +62,9 @@ bundle exec sidekiq
 rails server
 ```
 
-# Rootly AI Suggestions
+# AI Suggestions
 
-Rootly AI Suggestions is a real-time incident response assistant designed to analyze meeting transcripts and surface actionable insights for engineering teams. It uses a hybrid system of fast heuristics and OpenAI-powered language analysis to categorize, filter, and present key information — all while the transcript replays at 10x speed.
+AI Suggestions is a real-time incident response assistant designed to analyze meeting transcripts and surface actionable insights for engineering teams. It uses a hybrid system of fast heuristics and OpenAI-powered language analysis to categorize, filter, and present key information — all while the transcript replays at 10x speed.
 
 ## 🔍 What It Does
 

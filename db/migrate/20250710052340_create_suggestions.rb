@@ -10,7 +10,7 @@ class CreateSuggestions < ActiveRecord::Migration[8.0]
 
       t.timestamps
     end
-    
+
     add_index :suggestions, :incident_id
     add_index :suggestions, :suggestion_type
     add_index :suggestions, :status

@@ -9,18 +9,18 @@ class Suggestion < ApplicationRecord
   # - accepted: :boolean (whether suggestion was accepted into incident record)
   # - content_digest: :string (SHA-256 hash for deduplication)
   # - duplicate_count: :integer (number of times this suggestion was generated)
-  
+
   validates :content, presence: true
-  validates :suggestion_type, presence: true, inclusion: { 
-    in: %w[action_item trigger_event root_cause_theory missing_metadata] 
+  validates :suggestion_type, presence: true, inclusion: {
+    in: %w[action_item trigger_event root_cause_theory missing_metadata]
   }
   validates :status, inclusion: { in: %w[new accepted dismissed] }, allow_nil: true
-  
+
   after_initialize :set_defaults
-  
+
   private
-  
+
   def set_defaults
-    self.status ||= 'new'
+    self.status ||= "new"
   end
 end

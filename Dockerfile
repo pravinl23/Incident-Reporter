@@ -2,8 +2,8 @@
 # check=error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t rootly_ai_suggestions .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name rootly_ai_suggestions rootly_ai_suggestions
+# docker build -t ai_suggestions .
+# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name ai_suggestions ai_suggestions
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
